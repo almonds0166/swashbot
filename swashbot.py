@@ -4,6 +4,7 @@ import traceback
 import discord
 import asyncio
 import pickle
+import requests
 from collections import deque
 from datetime import datetime, timedelta
 

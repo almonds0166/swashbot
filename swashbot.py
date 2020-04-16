@@ -200,8 +200,20 @@ async def refresh_queue(limit=100):
       queue.appendleft(msg)
 
 async def tik():
-   """Adds a dot to the screen every 60 seconds or so."""
+   """
+   Adds a dot to the screen every 60 seconds or so.
+   Refreshes activity status as well.
+   """
+   await client.wait_until_ready()
+   activity = discord.Activity(
+      type=discord.ActivityType.listening,
+      name="the soft waves"
+   )
    while True:
+      await client.change_presence(
+         status=discord.Status.online,
+         activity=activity
+      )
       print(" .")
       await asyncio.sleep(60)
 
@@ -213,15 +225,6 @@ async def ebb_and_flow():
 
    if len(options["me"]) < 10:
       options["me"] = f"<@!{client.id}>"
-
-   activity = discord.Activity(
-      type=discord.ActivityType.listening,
-      name="the soft waves"
-   )
-   await client.change_presence(
-      status=discord.Status.online,
-      activity=activity
-   )
 
    await refresh_queue()
 

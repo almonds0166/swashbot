@@ -66,8 +66,7 @@ else:
       "atMost": 50,
       "atLeast": 0,
       "time": "inf", # minutes
-      "channel": None,
-      "me": "<@!>" # placeholder
+      "channel": None
    }
    save_pickle()
 queue = deque()
@@ -84,7 +83,7 @@ async def on_message(message):
 
    if options["channel"] is None:
       if not message.author.bot \
-      and message.content.strip().lower() == options["me"] + " here":
+      and message.clean_content.strip().lower() == f"@{BOT_NAME} here":
          await message.add_reaction("👀")
          options["channel"] = message.channel.id
          await refresh_queue()
@@ -97,8 +96,8 @@ async def on_message(message):
    print(f"Added message to queue.")
 
    if not message.author.bot \
-   and message.content.startswith(options["me"]): # command
-      cmd, *args = message.content[len(options["me"]):].strip().lower().split(" ")
+   and message.clean_content.startswith(f"@{BOT_NAME}"): # command
+      cmd, *args = message.clean_content[1+len(BOT_NAME):].strip().lower().split(" ")
       await message.add_reaction("👀")
 
       if cmd == "tsunami":
@@ -222,9 +221,6 @@ async def ebb_and_flow():
 
    await client.wait_until_ready()
    print(f"Received login callback.")
-
-   if len(options["me"]) < 10:
-      options["me"] = f"<@!{client.id}>"
 
    await refresh_queue()
 

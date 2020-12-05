@@ -201,9 +201,6 @@ class Swashbot(discord.Client):
       """
       if not self.ready: return
 
-      # make sure message wasn't sent by self
-      if msg.author.id == self.user.id: return
-
       # sadly, Swashbot can't hang out in group DMs
       if msg.channel.type == discord.ChannelType.group \
       or msg.channel.type == discord.ChannelType.private:
@@ -236,6 +233,9 @@ class Swashbot(discord.Client):
 
       # at this point, make sure message isn't a system message
       if msg.is_system(): return
+
+      # and make sure message wasn't sent by self
+      if msg.author.id == self.user.id: return
 
       # otherwise, start processing command
       p = self.prefixes.get(gid, "~")

@@ -16,10 +16,8 @@ async def command(client, param, ctx):
       param = max(0, int(param))
    elif param in ("inf", "infty", "infinity"):
       param = INF
-   elif param == "":
-      param = 100 # default values
-   else:
-      return
+   else: # param == ""
+      param = 100 # default value
 
    if param == 0:
       # This waving emoji GIF was shamelessly stolen from the

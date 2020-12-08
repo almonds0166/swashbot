@@ -292,7 +292,12 @@ class Swashbot(discord.Client):
          if not msg.pinned:
             self.flotsam[cid].append_old(msg)
 
-      await self.delete_multiple_messages(channel, self.flotsam[cid].oldest.t)
+      try:
+         await self.delete_multiple_messages(channel, self.flotsam[cid].oldest.t)
+      except AttributeError:
+         # this occurs if there are no messages in a channel or if (at_least == 0
+         # and at_most == inf)
+         pass
 
       return True
 

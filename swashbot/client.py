@@ -243,16 +243,6 @@ class Swashbot(discord.Client):
          # not a command
          return
       else:
-         # Swashbot only listens to members with the Manage Channels permission
-         # hmm, users may be able to get around this by using bot/webhook proxies
-         if not msg.author.bot \
-         and not msg.author.permissions_in(msg.channel).manage_channels:
-            await msg.channel.send("You don't have the `Manage Channels` permission :eyes:")
-            return
-         # additionally, Swashbot needs Manage Messages permission to operate
-         if not msg.guild.me.permissions_in(msg.channel).manage_messages:
-            await msg.channel.send("I need the `Manage Messages` permission before I can respond to commands :eyes:")
-            return
          # could be a command
          content = msg.clean_content[len(p):].lower()
 
@@ -273,6 +263,19 @@ class Swashbot(discord.Client):
             except discord.NotFound:
                pass
             return
+
+      # cmd is indeed recognized as a command at this point
+
+      # Swashbot only listens to members with the Manage Channels permission
+      # hmm, users may be able to get around this by using bot/webhook proxies
+      if not msg.author.bot \
+      and not msg.author.permissions_in(msg.channel).manage_channels:
+         await msg.channel.send("You don't have the `Manage Channels` permission :eyes:")
+         return
+      # additionally, Swashbot needs Manage Messages permission to operate
+      if not msg.guild.me.permissions_in(msg.channel).manage_messages:
+         await msg.channel.send("I need the `Manage Messages` permission before I can respond to commands :eyes:")
+         return
 
       # now actually process the command
       await self.cmds[cmd](self, param, ctx)

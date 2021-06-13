@@ -29,7 +29,7 @@ async def command(client, param, ctx):
 
    e = discord.Embed(
       title="Example commands",
-      description="[Read the documentation here](https://github.com/almonds0166/swashbot/blob/master/docks/docks.md)",
+      description="[Read the documentation here](https://github.com/almonds0166/swashbot/blob/master/docs/docks.md)",
       color=client.color
    )
 

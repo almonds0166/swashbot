@@ -11,10 +11,10 @@ async def command(client, param, ctx):
    if param.isdigit():
       param = max(0, int(param))
    elif param in ("inf", "infty", "infinity"):
-      param = 10
+      param = 20
    else: # param == ""
       param = 5 # default value
-   param = min(param, 10)
+   param = min(param, 20)
 
    cid = ctx.channel.id
 

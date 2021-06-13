@@ -217,7 +217,7 @@ class Swashbot(discord.Client):
          await debug(f"Message with ID {msg.reference.message_id} was pinned in a channel.")
          if cid in self.flotsam:
             try:
-               self.flotsam[cid].remove(msg.reference.id)
+               self.flotsam[cid].remove(msg.reference.message_id)
             except KeyError: # not in there
                #await debug("Key was not found in self.decks. Did Swashbot delete this message?")
                pass

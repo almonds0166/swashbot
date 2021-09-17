@@ -32,8 +32,13 @@ async def command(client, param, ctx):
       s = "No settings saved for this channel yet.\n"
 
    s += (
-      f"`n` = `{len(client.all_guilds)}`\n"
-      f"`c` = `{len(client.all_channels)}`\n"
+      f"Servers: {len(client.all_guilds)}\n"
+      f"Channels: {len(client.all_channels)}\n"
+      f"Uptime: {client.uptime}s\n"
+      f"Msgs. deleted: {client.messages_deleted}\n"
+      f"Rate: {60*client.deletion_rate:.1} msg/min\n"
+      f"Disconnects: {client.disconnects}\n"
+      f"Errors: {client.errors}\n"
    )
 
    s += f"Tail ({param}) of `debug.log`:\n```\n"

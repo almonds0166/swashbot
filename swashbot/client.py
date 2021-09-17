@@ -35,6 +35,10 @@ class Swashbot(discord.Client):
       # analytics
       self.all_guilds = set()
       self.all_channels = set()
+      self.messages_deleted = 0
+      self.t0 = datetime.utcnow()
+      self.disconnects = 0
+      self.errors = 0
 
       # sugar
       self.color = discord.Colour.from_rgb(*COLOUR)
@@ -55,6 +59,18 @@ class Swashbot(discord.Client):
          if not full_path.is_file() or full_path.suffix != ".py": continue
          module_name = f"swashbot.cmds.{full_path.stem}"
          self.cmds[cmd] = __import__(module_name, fromlist=[None]).command
+
+   @property
+   def uptime(self) -> timedelta:
+      return datetime.utcnow() - self.t0
+
+   @property
+   def num_channels(self) -> int:
+      return len(self.all_channels)
+
+   @property
+   def deletion_rate(self) -> float:
+      return self.messages_deleted / self.uptime.total_seconds()
 
    async def toc(self):
       """
@@ -83,20 +99,22 @@ class Swashbot(discord.Client):
 
       if not self.ready:
          # keep track of uptime
-         self.t0 = datetime.now()
+         self.t0 = datetime.utcnow()
          now = \
             self.t0.strftime("%a %d %b %Y at %H:%M:%S") + \
             self.t0.strftime("%p").lower()
          await info(
             f"Successfully connected to and prepared data from Discord. "
-            f"Where I currently seem to be at, the time is {now}."
+            f"UTC time is {now}."
          )
          self.ready = True
       else:
+         self.disconnects += 1
          await debug("Reconnected after failed resume request.")
       pass
 
    async def on_error(self, event, *args, **kwargs):
+      self.errors += 1
       e = traceback.format_exc()
       await error(
          "Encountered exception, see here for details:\n" + e,
@@ -153,7 +171,9 @@ class Swashbot(discord.Client):
       msg = await self.try_to_fetch_message(channel, mid)
       if msg is None: return
 
-      if not msg.pinned: await msg.delete()
+      if not msg.pinned:
+         await msg.delete()
+         self.messages_deleted += 1
 
    async def delete_multiple_messages(self, channel, t, limit=None):
       """
@@ -161,10 +181,10 @@ class Swashbot(discord.Client):
       """
       await info(f"Tasked with bulk deleting messages (limit = {limit}, before = {t}).")
 
-      delete_count = 0
       async for msg in channel.history(limit=limit, before=t):
-         if not msg.pinned: await msg.delete()
-         delete_count += 1
+         if not msg.pinned:
+            await msg.delete()
+            self.messages_deleted += 1
 
    async def on_raw_message_delete(self, payload):
       """

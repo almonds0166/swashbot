@@ -34,9 +34,9 @@ async def command(client, param, ctx):
    s += (
       f"Servers: {len(client.all_guilds)}\n"
       f"Channels: {len(client.all_channels)}\n"
-      f"Uptime: {client.uptime}s\n"
+      f"Uptime: {client.uptime.total_seconds()}s\n"
       f"Msgs. deleted: {client.messages_deleted}\n"
-      f"Rate: {60*client.deletion_rate:.1} msg/min\n"
+      f"Rate: {60*client.deletion_rate:.1f} msg/min\n"
       f"Disconnects: {client.disconnects}\n"
       f"Errors: {client.errors}\n"
    )

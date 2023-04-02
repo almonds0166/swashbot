@@ -1,0 +1,9 @@
+# environments
+venv*/
+pyrightconfig.json
+
+# bytes
+__pycache__/
+
+# test databases
+swashbot.ltm

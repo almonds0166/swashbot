@@ -5,6 +5,7 @@
 Inspired by friends' privacy concerns about message permanence on Discord, in comparison to ephemeral messaging schemes (for instance, Signal's disappearing messages feature).
 
 [**Swashbot documentation**](#swashbot-documentation)<br/>
+&emsp;&emsp;[Installation](#installation)<br/>
 &emsp;&emsp;[High-level behavior](#high-level-behavior)<br/>
 &emsp;&emsp;&emsp;&emsp;[Zones](#zones)<br/>
 &emsp;&emsp;&emsp;&emsp;[Commands](#commands)<br/>
@@ -13,7 +14,6 @@ Inspired by friends' privacy concerns about message permanence on Discord, in co
 &emsp;&emsp;&emsp;&emsp;[Working memory](#working-memory)<br/>
 &emsp;&emsp;&emsp;&emsp;[Long-term memory](#long-term-memory)<br/>
 &emsp;&emsp;&emsp;&emsp;&emsp;&emsp;[`memo`](#memo)<br/>
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;[`prefixes`](#prefixes)<br/>
 &emsp;&emsp;&emsp;&emsp;[Complexity analysis](#complexity-analysis)<br/>
 &emsp;&emsp;&emsp;&emsp;&emsp;&emsp;[Space complexity](#space-complexity)<br/>
 &emsp;&emsp;&emsp;&emsp;&emsp;&emsp;[Time complexity](#time-complexity)<br/>
@@ -22,13 +22,41 @@ Inspired by friends' privacy concerns about message permanence on Discord, in co
 &emsp;&emsp;&emsp;&emsp;[Potential future features](#potential-future-features)<br/>
 [**EOF**](#eof)
 
+## Installation
+
+[^ Jump to top](#swashbot-documentation)
+
+1. The only package required is `discord.py`:
+
+  ```
+  pip install -U discord
+  ```
+
+  Keep this up-to-date, as, in the past, Discord may change their rate limits.
+
+2. Set up the following environment variables (see `config.py`):
+
+  | Environment variable | Description                |
+  |----------------------|:---------------------------|
+  | `SWASHBOT_TOKEN`     | Client secret token        |
+  | `SWASHBOT_DATABASE`  | Location of Swashbot's SQLite database (default `./swashbot.ltm`) |
+  | `SWASHBOT_PREFIX`    | Bot prefix (default `~`)   |
+
+  The only variable required is the **token**, don't forget it.
+
+3. Run Swashbot:
+
+  ```
+  python run.py
+  ```
+
 ## High-level behavior
 
 [^ Jump to top](#swashbot-documentation)
 
 With Swashbot, server moderators (specifically, users with the `Manage Channels` permission) can set how much time it takes messages in a channel to erase. In addition, Swashbot can be told to always keep a minimum amount of messages in the channel, as well as to maintain a maximum limit. These three degrees of freedom define three zones, explained below.
 
-Sadly, since users can't befriend bots, and since, even if they could, there's no `Manage Messages` permission in group DMs, Swashbot cannot be used in private group DMs. A cumbersome workaround might be to create a small server with one channel.
+Due to Discord limitations, Swashbot cannot be used in private group DMs. A workaround might be to create a small server with one channel.
 
 ### Zones
 
@@ -36,9 +64,9 @@ Sadly, since users can't befriend bots, and since, even if they could, there's n
 
 Swashbot washes away messages in a channel according to three zones:
 
-1. **Shore face**: This zone represents messages furthest into the past, or equivalently, furthest up in a channel's history. Swashbot deletes any messages reaching this zone, no matter how short of a time has passed. The limit of this zone is specified by defining the maximum amount of messages `m` allowed in the channel via the `~at most m` command.
-2. **Swash zone**: These messages are erased according to a set time. This expiration time `t` in minutes is set by the `~time t` command.
-3. **Back shore**: The opposite of the shore face, this zone represents the most recent messages in a channel. Swashbot keeps these messages regardless of how much time has passed, until they enter the swash zone. The number of messages in the back shore `m` is set by the `~at least m` command.
+1. **Shore face**: This zone represents messages furthest into the past, or equivalently, furthest up in a channel's history. Swashbot deletes any messages reaching this zone, no matter how short of a time has passed. The limit of this zone is specified by defining the maximum amount of messages `m` allowed in the channel via the `~atmost m` command.
+2. **Swash zone**: These messages are erased according to a set time. This expiration time `t` in minutes is set by the `~minutes t` command.
+3. **Back shore**: The opposite of the shore face, this zone represents the most recent messages in a channel. Swashbot keeps these messages regardless of how much time has passed, until they enter the swash zone. The number of messages in the back shore `m` is set by the `~atleast m` command.
 
 ![(Figure describing the three zones visually)](img/zones.png)
 
@@ -48,20 +76,19 @@ Credit for image on left side: [Alex Perez (@a2eorigins) via Unsplash](https://u
 
 [^ Jump to top](#swashbot-documentation)
 
-|       Group | Command & syntax | Description                                                  |
-| ----------: | :--------------: | :----------------------------------------------------------- |
-|        Meta |     `~help`      | Provides a link to this documentation as well as a list of example commands. |
-|        Meta |     `~info`      | Display some information about the current instance of Swashbot, including a link to this repository and the current commit Swashbot is operating at. |
-|        Meta |   `~prefix p`    | Change the bot prefix to `p`. Works on a server-by-server basis. `p` may be up to 32 characters long. |
-| Fundamental |  `~at least m`   | Always keep the `m` most recent messages in the channel. Defines the size of the [back shore](#zones). |
-| Fundamental |   `~at most m`   | Keep the channel's message count at most `m` by deleting the oldest messages in the channel. Defines where the [shore face](#zones) begins. |
-| Fundamental |    `~current`    | Display current settings for the channel.                    |
-| Fundamental |    `~time t`     | Any messages in the [swash zone](#zones) will be erased after `t` minutes. |
-| Fundamental |    `~wave m`     | Wash away the last `m` messages. `~wave` without providing the `m` parameter defaults to washing away 100 messages. |
+| Command & syntax | Description                                                  |
+| :--------------: | :----------------------------------------------------------- |
+| `~help`          | Provides a link to this documentation as well as a list of example commands. |
+| `~stats`         | Displays some statistics since Swashbot logged in.           |
+| `~current`       | Display current settings for the channel.                    |
+| `~wave m`        | Wash away the last `m` messages. `~wave` without providing the `m` parameter defaults to washing away 100 messages. |
+| `~atleast m`     | Always keep the `m` most recent messages in the channel. Defines the size of the [back shore](#zones). |
+| `~atmost m`      | Keep the channel's message count at most `m` by deleting the oldest messages in the channel. Defines where the [shore face](#zones) begins. |
+| `~minutes t`     | Any messages in the [swash zone](#zones) will be erased after `t` minutes. |
 
 Note that values for `m` and `t` in the commands above also include `0` and `inf` (infinity).
 
-To quickly reset a channel's settings, use `~at least inf`, since this is essentially telling Swashbot to keep an infinite amount of messages in the channel.
+To quickly reset a channel's settings, use `~atleast inf`, since this is essentially telling Swashbot to keep an infinite amount of messages in the channel.
 
 ## Low-level behavior
 
@@ -69,63 +96,46 @@ To quickly reset a channel's settings, use `~at least inf`, since this is essent
 
 Swashbot is an instance of a class called `Swashbot` that inherits from [`discord.Client`](https://discordpy.readthedocs.io/en/latest/api.html#client).
 
-It has an `async` task for each channel it swashes over.
-
 ### Project structure
 
 [^ Jump to top](#swashbot-documentation)
 
+* `cogs/` -- discord.py bot cogs
+* `utils/` -- helper modules
 * `config.py` -- place bot token here
+* `main.py` -- main Swashbot code
 * `run.py` -- run Swashbot
-* `swashbot/`
-  * `client.py` -- where the Swashbot class is written
-  * `debug.py` -- code that helps me debug
-  * `utils.py` -- helper classes and functions
-  * `cmds/` -- folder containing all the commands' code
 
 ### Working memory
 
 [^ Jump to top](#swashbot-documentation)
 
-The most important variables Swashbot keeps track of are `memo`, `prefixes`, and `flotsam`.
+The most important variables Swashbot keeps track of are `memo` and `decks`.
 
-`memo` is a dict keyed by channel ID that keeps track of channels' settings.
-
-`prefixes` is a dict keyed by server ID that keeps track of servers' prefixes.
-
-`flotsam` is a dict keyed by channel ID that keeps track of all messages within the swash zone and back shore in the channel via noting the message ID and message creation date.
+* `memo` is a `LongTermMemory` object that keeps track of channels' settings.
+* `decks` is a `dict` keyed by channel ID that keeps track of all messages within the swash zone and back shore in the channel by taking note of the message ID and message creation date.
 
 ### Long-term memory
 
 [^ Jump to top](#swashbot-documentation)
 
-In the case of Discord outages, updating code, and other script reboots, Swashbot uses a SQLite database file to remember which channels it should be keeping track of. By default, the file is called `swashbot.ltm` and will henceforce be referred to as Swashbot's LTM.
+In the case of Discord outages, updating code, and other script reboots, Swashbot has "long-term memory", which is a SQLite database file, to remember which channels it should be keeping track of. By default, the file is called `swashbot.ltm`.
 
-In Swashbot's LTM, there are two tables: `memo` and `prefixes`.
+In Swashbot's long-term memory, there is one table: `memo`.
 
-These tables store server and/or channel IDs as `INTEGER` types. Note that since an `INTEGER` in a SQLite3 database is a *signed* 64-bit integer and thus may be at greatest `2**63 - 1 = 9223372036854775807`, we may want to figure out in what circumstances the [*unsigned* 64-bit integer channel and server IDs](https://discord.com/developers/docs/reference#snowflakes) might break this ceiling. According to the Discord documentation, the 42 most significant bits of the ID represent milliseconds since the first second of 2015 (Discord Epoch). Thus, IDs are expected to break the ceiling of a signed SQLite3 integer starting around `2**42 = 2199023255552` milliseconds since Discord Epoch, or around Wednesday, September 6, 2084. So, remind me to do something about that by then :ok_hand:
+The table stores server and channel IDs as `INTEGER` types. Note that since an `INTEGER` in a SQLite3 database is a *signed* 64-bit integer and thus may be at greatest `2**63 - 1 = 9223372036854775807`, we may want to figure out in what circumstances the [*unsigned* 64-bit integer channel and server IDs](https://discord.com/developers/docs/reference#snowflakes) might break this ceiling. According to the Discord documentation, the 42 most significant bits of the ID represent milliseconds since the first second of 2015 (Discord Epoch). Thus, IDs are expected to break the ceiling of a signed SQLite3 integer starting around `2**42 = 2199023255552` milliseconds since Discord Epoch, or around Wednesday, September 6, 2084. So, remind me to do something about that by then :ok_hand:
 
 #### `memo`
 
 [^ Jump to top](#swashbot-documentation)
 
-|       `channel`       |  `guild`  | `at_least` | `at_most` |  `time_`  |
-| :-------------------: | :-------: | :--------: | :-------: | :-------: |
-| `INTEGER PRIMARY KEY` | `INTEGER` | `INTEGER`  | `INTEGER` | `INTEGER` |
+|       `channel`       | `channel` |  `guild`  | `at_least` | `at_most` | `minutes` |
+| :-------------------: | :-------: | :-------: | :--------: | :-------: | :-------: |
+| `INTEGER PRIMARY KEY` | `INTEGER` | `INTEGER` | `INTEGER`  | `INTEGER` | `INTEGER` |
 
-`at_least`, `at_most`, and `time_` may be null, representing infinity.
+`at_least`, `at_most`, and `minutes` may be null, representing infinity.
 
 `guild` is the ID of the server, and `channel` is the ID of the channel.
-
-#### `prefixes`
-
-[^ Jump to top](#swashbot-documentation)
-
-|        `guild`        | `prefix` |
-| :-------------------: | :------: |
-| `INTEGER PRIMARY KEY` |  `TEXT`  |
-
-`guild` is the ID of the server.
 
 ### Complexity analysis
 
@@ -147,9 +157,9 @@ Note: O(n) ∈ O(c) ∈ O(m)
 
 [^ Jump to top](#swashbot-documentation)
 
-Since Swashbot keeps track of how many messages are in the back shore and swash zone, Swashbot's RAM space complexity ϴ(m). There are ways to implement Swashbot's operations with a handful of ϴ(1)-size pointers & variables for ϴ(c) space, but with how I envision it, that would require less agile performance and more API requests.
+Since Swashbot keeps track of how many messages are in the back shore and swash zone, Swashbot's RAM space complexity is ϴ(m). There are ways to implement Swashbot's operations with a handful of ϴ(1)-size pointers & variables for ϴ(c) space, but with how I envision it, that would require less agile performance and more API requests.
 
-Since Swashbot's LTM needs only to keep track of a channel's settings, and not any messages in the channels, the space of complexity of Swashbot's LTM is ϴ(c).
+Since Swashbot's long-term memory needs only to keep track of a channel's settings, and not any messages in the channels, the space of complexity of Swashbot's long-term memory is just ϴ(c).
 
 #### Time complexity
 
@@ -163,9 +173,9 @@ Since Swashbot's LTM needs only to keep track of a channel's settings, and not a
 | Message is deleted (by any client other than Swashbot) |                     ϴ(1)                      |
 | Bulk message deletion (by any bot other than Swashbot) | Not yet implemented -- intended to be O(m_ij) |
 |                           Swashbot removed from server |  Not yet implemented -- intended to be O(1)   |
-|                                  `~at least m` command |                 Ω(1), O(m_ij)                 |
-|                                   `~at most m` command |                 Ω(1), O(m_ij)                 |
-|                                      `~time t` command |                 Ω(1), O(m_ij)                 |
+|                                   `~atleast m` command |                 Ω(1), O(m_ij)                 |
+|                                    `~atmost m` command |                 Ω(1), O(m_ij)                 |
+|                                   `~minutes t` command |                 Ω(1), O(m_ij)                 |
 |                                      `~wave m` command |                 Ω(1), O(m_ij)                 |
 
 ## Planned updates
@@ -176,26 +186,17 @@ Since Swashbot's LTM needs only to keep track of a channel's settings, and not a
 
 [^ Jump to top](#swashbot-documentation)
 
-* What happens if an entire server forgets their prefix?
-* What happens if two commands are sent within half a second of each other (e.g. worst case might be `~at most inf` followed by `~at most 0`)?
-* Users may be able to get around the `Manage Channels` requirement by proxying via a webhook or bot. (Discord users who know what I mean by that will know what I mean by that.)
-* When Swashbot is removed from a server, it doesn't (yet) automatically stop its `async` tasks appropriately. This isn't exactly fatal, but it's not elegant.
-* When a bot bulk deletes messages in a channel, Swashbot doesn't (yet) refresh its `flotsam` variable appropriately. This isn't exactly fatal, but it's not elegant.
-* Prefix is incorrectly made lowercase.
-* Command is not stripped.
-* Prefix may be cut off if >32 characters
+* What happens if two commands are sent within half a second of each other (e.g. worst case might be `~atmost inf` followed by `~atmost 0`)?
+* Users *may* be able to get around the `Manage Channels` requirement by proxying via a webhook or bot. (Discord users who know what I mean by that will know what I mean by that.)
+* When Swashbot is removed from a server, it doesn't (yet) automatically detect that. This isn't exactly fatal, but it's not elegant.
+* When a bot bulk deletes messages in a channel, Swashbot doesn't (yet) refresh its `decks` variable appropriately. This isn't exactly fatal, but it's not elegant.
 
 ### Potential future features
 
 [^ Jump to top](#swashbot-documentation)
 
-* Would be convenient if Swashbot accepted units of time, like `~time 24h` or `~time 30d`.
-* Alternatively, would be cool if Swashbot could perform arithmetic, like `~time 24*60`  or `~time 30*24*60`.
-* Maybe have an explicit `~reset` sort of command that quickly resets the channel settings? Note that `~at least inf` does this, but that's not exactly obvious to new users.
 * Cleaner error handling
-* Fancy transparent analytics:
-  * Track how many warnings pop up
-  * Track how many of each type of warning (e.g. `discord.NotFound`, `discord.HTTPException`) pops up
+* Fancy analytics: track and report errors in a smart & transparent way
 * Make the bot more personable
 
 # EOF

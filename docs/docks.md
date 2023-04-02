@@ -26,15 +26,26 @@ Inspired by friends' privacy concerns about message permanence on Discord, in co
 
 [^ Jump to top](#swashbot-documentation)
 
-1. The only package required is `discord.py`:
+1. Clone the repo:
 
   ```
-  pip install -U discord
+  git clone https://github.com/almonds0166/swashbot.git
+  cd swashbot
   ```
 
-  Keep this up-to-date, as, in the past, Discord may change their rate limits.
+2. Check your Python environment:
 
-2. Set up the following environment variables (see `config.py`):
+  Swashbot requires Python v3.10 or higher. I recommend setting up a [venv](https://docs.python.org/3/library/venv.html).
+
+  The only package required is `discord.py`:
+
+  ```
+  pip install -U discord.py
+  ```
+
+  Keep this package up-to-date.
+
+3. Set up the following environment variables (see [`config.py`](https://github.com/almonds0166/swashbot/blob/master/config.py)):
 
   | Environment variable | Description                |
   |----------------------|:---------------------------|
@@ -44,7 +55,7 @@ Inspired by friends' privacy concerns about message permanence on Discord, in co
 
   The only variable required is the **token**, don't forget it.
 
-3. Run Swashbot:
+4. Run Swashbot:
 
   ```
   python run.py
@@ -101,7 +112,12 @@ Swashbot is an instance of a class called `Swashbot` that inherits from [`discor
 [^ Jump to top](#swashbot-documentation)
 
 * `cogs/` -- discord.py bot cogs
+  * `front.py` -- primary commands
+  * `meta.py` -- bot meta commands
+  * `washer.py` -- primary message deletion watchdog code
 * `utils/` -- helper modules
+  * `flotspam.py` -- bookkeeping channel messages
+  * `memory.py` -- channel settings long-term memory
 * `config.py` -- place bot token here
 * `main.py` -- main Swashbot code
 * `run.py` -- run Swashbot
@@ -112,7 +128,7 @@ Swashbot is an instance of a class called `Swashbot` that inherits from [`discor
 
 The most important variables Swashbot keeps track of are `memo` and `decks`.
 
-* `memo` is a `LongTermMemory` object that keeps track of channels' settings.
+* `memo` is a [`LongTermMemory` object](https://github.com/almonds0166/swashbot/blob/master/utils/memory.py) that keeps track of channels' settings.
 * `decks` is a `dict` keyed by channel ID that keeps track of all messages within the swash zone and back shore in the channel by taking note of the message ID and message creation date.
 
 ### Long-term memory
@@ -165,18 +181,19 @@ Since Swashbot's long-term memory needs only to keep track of a channel's settin
 
 [^ Jump to top](#swashbot-documentation)
 
-|                           Operation, event, or command |                Time complexity                |
-| -----------------------------------------------------: | :-------------------------------------------: |
-|                                     Bot initialization |                     ϴ(m)                      |
-|                               Washing away one message |                     ϴ(1)                      |
-|           New non-command message appears in a channel |                     ϴ(1)                      |
-| Message is deleted (by any client other than Swashbot) |                     ϴ(1)                      |
-| Bulk message deletion (by any bot other than Swashbot) | Not yet implemented -- intended to be O(m_ij) |
-|                           Swashbot removed from server |  Not yet implemented -- intended to be O(1)   |
-|                                   `~atleast m` command |                 Ω(1), O(m_ij)                 |
-|                                    `~atmost m` command |                 Ω(1), O(m_ij)                 |
-|                                   `~minutes t` command |                 Ω(1), O(m_ij)                 |
-|                                      `~wave m` command |                 Ω(1), O(m_ij)                 |
+|                           Operation, event, or command | Time complexity |
+| -----------------------------------------------------: | :-------------: |
+|                                     Bot initialization |      ϴ(m)       |
+|                       New message appears in a channel |      ϴ(1)       |
+|                               Washing away one message |      ϴ(1)       |
+| Message is deleted (by any client other than Swashbot) |      ϴ(1)       |
+| Bulk message deletion (by any bot other than Swashbot) |     O(m_ij)     |
+|                           Swashbot removed from server |     ϴ(c_i)      |
+|                              Server channel is deleted |      ϴ(1)       |
+|                                   `~atleast m` command |  Ω(1), O(m_ij)  |
+|                                    `~atmost m` command |  Ω(1), O(m_ij)  |
+|                                   `~minutes t` command |  Ω(1), O(m_ij)  |
+|                                      `~wave m` command |  Ω(1), O(m_ij)  |
 
 ## Planned updates
 

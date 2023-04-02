@@ -10,7 +10,7 @@ import traceback
 import discord
 from discord.ext import commands
 
-from utils.memory import LongTermMemory
+from utils.memory import LongTermMemory, Settings
 from utils.flotsam import Deck
 from config import SWASHBOT_PREFIX, SWASHBOT_DATABASE
 
@@ -22,6 +22,10 @@ _swashbot_intents = discord.Intents(
    message_content=True,
 )
 _swashbot_color = discord.Colour.from_rgb(46, 137, 139)
+_swashbot_login_activity = discord.Activity(
+   type=discord.ActivityType.listening,
+   name="the soft waves"
+)
 
 class Swashbot(commands.Bot):
    """Represents our beloved ocean bot
@@ -33,6 +37,7 @@ class Swashbot(commands.Bot):
       messages_deleted: the number of messages deleted since ready
       errors: errors caught since ready
       busy_level: the number of channels Swashbot is currently performing busywork on
+      commands_processed: the number of commands successfully processed
       memo: saved `~utils.memory.Settings` for channels
       decks: records of channels' messages for smart deletion
    """
@@ -44,9 +49,15 @@ class Swashbot(commands.Bot):
    messages_deleted: int = 0
    errors: int = 0
    busy_level: int = 0
+   commands_processed: int = 0
 
    def __init__(self) -> None:
-      commands.Bot.__init__(self, SWASHBOT_PREFIX, intents=_swashbot_intents)
+      commands.Bot.__init__(self, SWASHBOT_PREFIX,
+         intents=_swashbot_intents,
+         max_messages=None,
+         activity=_swashbot_login_activity,
+         status=discord.Status.dnd,
+      )
       self.memo = LongTermMemory(Path(SWASHBOT_DATABASE))
       self.decks: dict[int, Deck] = {}
 
@@ -99,6 +110,32 @@ class Swashbot(commands.Bot):
          self.decks[channel].remove(message)
       except KeyError:
          pass
+
+   async def on_raw_bulk_message_delete(self, payload: discord.RawBulkMessageDeleteEvent) -> None:
+      """(Whenever a batch of messages has been detected as deleted)
+      """
+      channel = payload.channel_id
+      if channel not in self.decks: return
+
+      for message in payload.message_ids:
+         try:
+            self.decks[channel].remove(message)
+         except KeyError:
+            pass
+
+   async def on_guild_remove(self, guild: discord.Guild) -> None:
+      if guild.id not in self.memo.guilds: return
+
+      for channel in self.memo.guilds[guild.id]:
+         self.memo.save(channel, guild.id, Settings())
+         if channel in self.decks: del self.decks[channel]
+
+   async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
+      self.memo.save(channel.id, channel.guild.id, Settings())
+      if channel.id in self.decks: del self.decks[channel.id]
+
+   async def on_command_completion(self, ctx: commands.Context) -> None:
+      self.commands_processed += 1
 
    @property
    def uptime(self) -> str:
@@ -153,7 +190,11 @@ class Swashbot(commands.Bot):
       settings = self.memo.channels[channel]
       if not settings: return
 
-      discord_channel = await self.try_channel(channel)
+      try:
+         discord_channel = await self.try_channel(channel)
+      except discord.NotFound:
+         if channel in self.memo.channels: self.memo.remove(channel)
+         return
       deck = Deck()
 
       # ⚠️ TODO: not sure if this limit is correct

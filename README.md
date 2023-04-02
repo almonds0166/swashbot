@@ -14,11 +14,14 @@ Requires Python **3.10** or greater.
 
 ### Gist of commands
 
-* `~help` -- share a help leaflet
-* `~current` -- get the current settings for the channel
-* `~wave` -- 📝 erase the last 100 messages in the channel
-* `~minutes 300` -- 📝🔧 erase messages after they've existed for 300 minutes (5 hours)
-* `~atleast 10` -- 📝🔧 don't delete the current 10 most recent messages in the channel
-* `~atmost 200` -- 📝🔧 never keep more than 200 messages in the channel
+| User permissions |        Command | Description                                |
+| ---------------: | -------------: | :------------------------------------------|
+|                  |        `~help` | share a help leaflet                       |
+|                  |     `~current` | get the current settings for the channel   |
+|                📝 |        `~wave` | erase the last 100 messages in the channel |
+|               📝🔧 | `~minutes 300` | erase messages after they've existed for 300 minutes (5 hours) |
+|               📝🔧 |  `~atleast 10` | don't delete the current 10 most recent messages in the channel |
+|               📝🔧 |  `~atmost 200` | never keep more than 200 messages in the channel             |
 
-(📝 requires Manage Messages permission; 🔧 requires Manage Channel permission)
+📝 requires the **Manage Messages** permission<br/>
+🔧 requires the **Manage Channel** permission

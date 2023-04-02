@@ -50,7 +50,7 @@ class MetaCog(commands.Cog):
    @commands.hybrid_command(name="stats", description="get statistics")
    async def slash_stats(self, ctx: commands.Context) -> None:
 
-      content = f"I've been up for {self.client.uptime}"
+      content = f"I've been up for **{self.client.uptime}**"
       busy_level = self.client.busy_level
       if busy_level:
          content += f"\n⚠️ Note: busy level is **{busy_level}**"
@@ -58,6 +58,8 @@ class MetaCog(commands.Cog):
       statistics = [
          f"* **{self.client.disconnects}** disconnect(s)",
          f"* **{self.client.errors}** error(s)",
+         f"* **{self.client.latency*1000:.1f}ms** latency",
+         f"* **{self.client.commands_processed}** command(s) processed",
          f"* washing **{len(self.client.memo.channels)}** channel(s)",
          f"* in **{len(self.client.memo.guilds)}** server(s)",
          f"* **{self.client.messages_deleted}** message(s) deleted",

@@ -230,8 +230,8 @@ class FrontCog(commands.Cog):
       content = (
          f"```py\n"
          f"{{\n"
-         f"   \"at_least\": {settings.at_least}\n"
-         f"   \"at_most\": {settings.at_most}\n"
+         f"   \"at_least\": {settings.at_least},\n"
+         f"   \"at_most\": {settings.at_most},\n"
          f"   \"minutes\": {settings.minutes}\n"
          f"}}\n"
          f"```\n"

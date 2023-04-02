@@ -138,16 +138,32 @@ class LongTermMemory:
 
       elif channel in self.channels:
          # remove from SQLite memory
-         cursor.execute("""
-            DELETE FROM memo
-            WHERE channel = ?;
-         """, (channel,))
+         self.remove(channel)
 
-         self.conn.commit()
+   def remove(self, channel: int) -> None:
+      """Erase settings from channel
+      """
+      cursor = self.conn.cursor()
 
-         # remove from working memory
-         del self.channels[channel]
-         if guild in self.guilds:
-            self.guilds[guild].discard(channel)
-            if not self.guilds[guild]:
-               del self.guilds[guild]
+      cursor.execute("""
+         SELECT guild
+         FROM memo
+         WHERE channel = ?;
+      """, (channel,))
+      result = cursor.fetchone()
+      if result is None: return
+      guild, = result
+
+      cursor.execute("""
+         DELETE FROM memo
+         WHERE channel = ?;
+      """, (channel,))
+
+      self.conn.commit()
+
+      # remove from working memory
+      del self.channels[channel]
+      if guild in self.guilds:
+         self.guilds[guild].discard(channel)
+         if not self.guilds[guild]:
+            del self.guilds[guild]

@@ -8,6 +8,7 @@ if vi < (3, 10):
 
 try:
    import discord
+   from discord.utils import setup_logging
 except ImportError as e:
    print((
       f"Hi, friend! I'm having trouble importing the discord.py module. "
@@ -17,7 +18,10 @@ except ImportError as e:
    raise e
 
 from main import Swashbot
-from config import SWASHBOT_TOKEN
+from config import SWASHBOT_TOKEN, logging_setup
+
+if logging_setup:
+   setup_logging(**logging_setup)
 
 if __name__ == "__main__":
    bot = Swashbot()

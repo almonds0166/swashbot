@@ -205,8 +205,6 @@ Since Swashbot's long-term memory needs only to keep track of a channel's settin
 
 * What happens if two commands are sent within half a second of each other (e.g. worst case might be `~atmost inf` followed by `~atmost 0`)?
 * Users *may* be able to get around the `Manage Channels` requirement by proxying via a webhook or bot. (Discord users who know what I mean by that will know what I mean by that.)
-* When Swashbot is removed from a server, it doesn't (yet) automatically detect that. This isn't exactly fatal, but it's not elegant.
-* When a bot bulk deletes messages in a channel, Swashbot doesn't (yet) refresh its `decks` variable appropriately. This isn't exactly fatal, but it's not elegant.
 
 ### Potential future features
 

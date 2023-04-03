@@ -5,6 +5,8 @@ from typing import Optional, Dict, Set
 from pathlib import Path
 import sqlite3
 from math import inf, isinf
+import shutil
+from datetime import datetime
 
 @dataclass(frozen=True)
 class Settings:
@@ -47,13 +49,15 @@ class LongTermMemory:
    Attributes:
       file: Path to the SQLite database
       conn: sqlite3 connection
-      guilds: Maps guild IDs to a set of channel IDs with saved settings
-      channels: Maps channel IDs to its settings
+      guilds: Maps channel IDs to respective guild IDs
+      channels: Maps guild IDs to a set of channel IDs
+      settings: Maps channel IDs to respective `Settings` objects
    """
    file: Path
    conn: sqlite3.Connection = field(default_factory=lambda: sqlite3.connect(":memory:"))
-   guilds: Dict[int, Set[int]] = field(default_factory=dict)
-   channels: Dict[int, Settings] = field(default_factory=dict)
+   guilds: Dict[int, int] = field(default_factory=dict)
+   channels: Dict[int, Set[int]] = field(default_factory=dict)
+   settings: Dict[int, Settings] = field(default_factory=dict)
 
    def __post_init__(self):
       self.conn = sqlite3.connect(self.file)
@@ -84,9 +88,11 @@ class LongTermMemory:
          )
          settings = Settings(*row)
          if settings:
-            self.channels[channel] = settings
-            if guild not in self.guilds: self.guilds[guild] = set()
-            self.guilds[guild].add(channel)
+            self.settings[channel] = settings
+            self.guilds[channel] = guild
+            if not guild in self.channels:
+               self.channels[guild] = set()
+            self.channels[guild].add(channel)
 
    def load(self, channel: int) -> Settings:
       cursor = self.conn.cursor()
@@ -107,9 +113,11 @@ class LongTermMemory:
       )
       settings = Settings(*row)
       if settings:
-         self.channels[channel] = settings
-         if guild not in self.guilds: self.guilds[guild] = set()
-         self.guilds[guild].add(channel)
+         self.settings[channel] = settings
+         self.guilds[channel] = guild
+         if not guild in self.channels:
+            self.channels[guild] = set()
+         self.channels[guild].add(channel)
 
       return settings
 
@@ -132,16 +140,18 @@ class LongTermMemory:
          self.conn.commit()
 
          # update to working memory
-         self.channels[channel] = settings
-         if guild not in self.guilds: self.guilds[guild] = set()
-         self.guilds[guild].add(channel)
+         self.settings[channel] = settings
+         self.guilds[channel] = guild
+         if not guild in self.channels:
+            self.channels[guild] = set()
+         self.channels[guild].add(channel)
 
-      elif channel in self.channels:
+      elif channel in self.settings:
          # remove from SQLite memory
          self.remove(channel)
 
    def remove(self, channel: int) -> None:
-      """Erase settings from channel
+      """Erase settings for channel
       """
       cursor = self.conn.cursor()
 
@@ -162,8 +172,21 @@ class LongTermMemory:
       self.conn.commit()
 
       # remove from working memory
-      del self.channels[channel]
-      if guild in self.guilds:
-         self.guilds[guild].discard(channel)
-         if not self.guilds[guild]:
-            del self.guilds[guild]
+      del self.settings[channel]
+      del self.guilds[channel]
+      self.channels[guild].discard(channel)
+      if not self.channels[guild]: del self.channels[guild]
+
+   def backup(self, tag: Optional[str]=None) -> str:
+      """Make a backup in the same directory as the database
+
+      Args:
+         tag: The note to append to the backup's filename. Default is a UTC timestamp.
+      """
+      parent = self.file.parent
+      if tag is None: tag = datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S")
+      backup_file = f"{self.file.name}.{tag}"
+      
+      shutil.copy2(self.file, parent / backup_file)
+      
+      return backup_file

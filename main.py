@@ -1,20 +1,24 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 from pathlib import Path
 from datetime import datetime, timedelta
 from math import isinf
+import asyncio
 import traceback
+import logging
 
 import discord
 from discord.ext import commands
 
 from utils.memory import LongTermMemory, Settings
 from utils.flotsam import Deck
+from utils.logging import TaskTracker
 from config import SWASHBOT_PREFIX, SWASHBOT_DATABASE
 
 # TODO: if a message has a thread attached, delete it?
+
+SwashbotMessageable = Union[discord.TextChannel, discord.Thread]
 
 _swashbot_intents = discord.Intents(
    guilds=True,
@@ -56,26 +60,31 @@ class Swashbot(commands.Bot):
          intents=_swashbot_intents,
          max_messages=None,
          activity=_swashbot_login_activity,
-         status=discord.Status.dnd,
+         status=discord.Status.online,
       )
       self.memo = LongTermMemory(Path(SWASHBOT_DATABASE))
       self.decks: dict[int, Deck] = {}
+      self.log = logging.getLogger("swashbot")
+      self.new_task = TaskTracker()
 
    async def setup_hook(self) -> None:
+      cogs = []
       for file in Path("./cogs").iterdir():
          if file.suffix == ".py":
             cog = f"cogs.{file.stem}"
             await self.load_extension(cog)
+            cogs.append(cog)
+
+      self.log.info(f"Loaded {len(cogs)} cog(s): {cogs}.")
 
    async def on_ready(self) -> None:
       if self.ready:
          self.disconnects += 1
          return
       
-      for channel in self.memo.channels:
+      for channel in self.memo.settings:
          await self.gather_flotsam(channel)
       
-      await self.change_presence(status=discord.Status.online)
       self.ready = datetime.utcnow()
 
    async def on_error(self, event_method: str, *args, **kwargs) -> None:
@@ -83,8 +92,10 @@ class Swashbot(commands.Bot):
      e = traceback.format_exc()
      summary = f"method: {event_method}\nargs: {args}\nkwargs: {kwargs}"
      details = f"```\n{e}\n```"
+     self.log.error(f"Encountered error:\n{summary}\n{details}")
 
    async def on_command_error(self, ctx: commands.Context, error: commands.errors.CommandError) -> None:
+      self.log.error(f"Unexpected command error:\n{error}")
       try:
          await ctx.message.add_reaction("👀")
       except:
@@ -94,7 +105,7 @@ class Swashbot(commands.Bot):
    async def on_message(self, message: discord.Message) -> None:
       if not self.ready: return
       channel = message.channel.id
-      if channel in self.memo.channels:
+      if channel in self.memo.settings:
          self.decks[channel].append_new(message)
 
       await self.process_commands(message)
@@ -116,6 +127,8 @@ class Swashbot(commands.Bot):
       """
       channel = payload.channel_id
       if channel not in self.decks: return
+      task = self.new_task()
+      self.log.info(f"{task}: Handling bulk delete of {len(payload.message_ids)} message(s) in channel {payload.channel_id} (guild {payload.guild_id}).")
 
       for message in payload.message_ids:
          try:
@@ -123,19 +136,31 @@ class Swashbot(commands.Bot):
          except KeyError:
             pass
 
-   async def on_guild_remove(self, guild: discord.Guild) -> None:
-      if guild.id not in self.memo.guilds: return
+      self.log.info(f"{task}: Done.")
 
-      for channel in self.memo.guilds[guild.id]:
-         self.memo.save(channel, guild.id, Settings())
-         if channel in self.decks: del self.decks[channel]
+   async def on_guild_remove(self, guild: discord.Guild) -> None:
+      if guild.id not in self.memo.channels: return
+
+      channels = self.memo.channels[guild.id]
+      task = self.new_task()
+      self.log.info(f"{task}: I was removed from a {guild.name!r} ({guild.id}), so I'll remove its {len(channels)} deck(s) from memory.")
+
+      for channel in channels: self.memo.remove(channel)
+      self.log.info(f"{task}: Done.")
 
    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
-      self.memo.save(channel.id, channel.guild.id, Settings())
-      if channel.id in self.decks: del self.decks[channel.id]
+      if channel in self.memo.settings:
+         self.log.info(f"The channel {channel.name!r} ({channel.id}) I was watching was deleted, so I'll remove its deck from memory.")
+         self.memo.remove(channel.id)
 
    async def on_command_completion(self, ctx: commands.Context) -> None:
       self.commands_processed += 1
+      args = ", ".join([repr(arg) for arg in ctx.args][2:])
+      summary = (
+         f"``{ctx.command}({args})`` invoked by "
+         f"{ctx.author} with {ctx.message.content!r}"
+      )
+      self.log.debug(f"Completed processing command #{self.commands_processed}: {summary}.")
 
    @property
    def uptime(self) -> str:
@@ -171,14 +196,17 @@ class Swashbot(commands.Bot):
 
       return f"1 message every {seconds / self.messages_deleted:.2f}s"
 
-   async def try_channel(self, channel: int) -> discord.TextChannel:
+   async def try_channel(self, channel: int) -> SwashbotMessageable:
       """Return full Discord channel object given channel ID
 
       Args:
          channel: Channel ID
       """
+      task = self.new_task()
+      self.log.debug(f"{task}: Trying to fetch channel {channel}...")
       discord_channel = await self.fetch_channel(channel)
-      assert isinstance(discord_channel, discord.TextChannel)
+      assert isinstance(discord_channel, SwashbotMessageable)
+      self.log.debug(f"{task}: Done.")
       return discord_channel
 
    async def gather_flotsam(self, channel: int) -> None:
@@ -187,23 +215,32 @@ class Swashbot(commands.Bot):
       Args:
          channel: Channel ID
       """
-      settings = self.memo.channels[channel]
+      task = self.new_task()
+      self.log.info(f"{task}: Gathering flotsam for channel {channel}...")
+      start = datetime.utcnow()
+
+      settings = self.memo.settings[channel]
       if not settings: return
 
       try:
          discord_channel = await self.try_channel(channel)
       except discord.NotFound:
-         if channel in self.memo.channels: self.memo.remove(channel)
+         if channel in self.memo.settings: self.memo.remove(channel)
          return
       deck = Deck()
 
       # ⚠️ TODO: not sure if this limit is correct
-      limit = None if isinf(settings.at_most) else int()
+      limit = None if isinf(settings.at_most) else int(settings.at_most)
       async for message in discord_channel.history(limit=limit):
          if message.pinned: continue
          deck.append_old(message)
 
       self.decks[channel] = deck
+
+      minutes, seconds = (int((datetime.utcnow() - start).total_seconds()), 60)
+      if seconds == 60: seconds = 0 # weird divmod bug
+      time = f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
+      self.log.info(f"{task}: Finished gathering flotsam for #{discord_channel.name} ({channel}) (about {len(deck)} messages(s) after {time}).")
 
    async def try_delete(self, discord_channel: discord.TextChannel, id: int) -> None:
       """Attempt to delete a single message
@@ -217,8 +254,11 @@ class Swashbot(commands.Bot):
       except discord.NotFound:
          return
       if message.pinned: return
-      await message.delete()
-      self.messages_deleted += 1
+      try:
+         await message.delete()
+         self.messages_deleted += 1
+      except discord.Forbidden:
+         pass
 
    async def delete_messages(self, channel: int, *, limit: int, beside: Optional[int]=None) -> None:
       """Delete a number of a channel's most recent messages
@@ -235,5 +275,56 @@ class Swashbot(commands.Bot):
       async for message in discord_channel.history(limit=limit):
          if message.id == beside: continue
          if message.pinned: continue
-         await message.delete()
-         self.messages_deleted += 1
+         try:
+            await message.delete()
+            self.messages_deleted += 1
+         except discord.Forbidden:
+            pass
+
+   async def check_permissions(self, channel: SwashbotMessageable, required: discord.Permissions, *,
+      inform: Optional[discord.Message]=None
+   ) -> bool:
+      """Check if we have the required permissions to continue
+
+      If we do, returns True, otherwise False. Swashbot will also try to
+      communicate what permissions are required.
+
+      Parameters:
+         channel: The Discord channel to check if we have permissions for
+         required: Permissions required to return True
+         inform: The Message to try to contact if we don't have enough permissions
+      """
+      if self.user is None: return False
+      self_member = channel.guild.get_member(self.user.id)
+
+      if self_member is None:
+         self.log.warning((
+            f"I tried to check my permissions for #{channel.name} ({channel.id}) in "
+            f"{channel.guild.name!r} ({channel.guild.id}), but it seems I'm not in that guild?"
+         ))
+         return False
+
+      perms = channel.permissions_for(self_member)
+      if required <= perms: return True
+
+      missing_perms = \
+         set(perm for perm, value in required if value) \
+         - set(perm for perm, value in perms if value)
+      missing = ", ".join([
+         f"**{perm}**"
+         for perm in missing_perms
+      ])
+
+      if inform:
+         inform_channel_perms = inform.channel.permissions_for(self_member)
+         msg = f"I need the following permission(s): {missing} 🙏"
+         if inform_channel_perms.send_messages:
+            async with channel.typing(): await asyncio.sleep(1)
+            if inform_channel_perms.read_message_history:
+               await inform.reply(msg)
+            else:
+               await inform.channel.send(msg)
+         elif inform_channel_perms.add_reactions:
+            await inform.add_reaction("🙏")
+
+      return False

@@ -1,3 +1,5 @@
+from typing import Optional
+
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -60,8 +62,8 @@ class MetaCog(commands.Cog):
          f"* **{self.client.errors}** error(s)",
          f"* **{self.client.latency*1000:.1f}ms** latency",
          f"* **{self.client.commands_processed}** command(s) processed",
-         f"* washing **{len(self.client.memo.channels)}** channel(s)",
-         f"* in **{len(self.client.memo.guilds)}** server(s)",
+         f"* washing **{len(self.client.memo.settings)}** channel(s)",
+         f"* in **{len(self.client.memo.channels)}** server(s)",
          f"* **{self.client.messages_deleted}** message(s) deleted",
          f"* at a rate of **{self.client.deletion_rate}**",
       ]
@@ -73,6 +75,13 @@ class MetaCog(commands.Cog):
       )
 
       await ctx.reply(content, embed=embed)
+
+   @commands.hybrid_command(name="backup", description="make a backup of Swashbot's long-term memory (must be bot owner)")
+   async def slash_backup(self, ctx: commands.Context, tag: Optional[str]=None):
+      if not await self.client.is_owner(ctx.author): return
+
+      backup_file = self.client.memo.backup(tag)
+      await ctx.reply(f"I made a backup named **{backup_file}**")
 
 async def setup(client: Swashbot) -> None:
    client.remove_command("help")

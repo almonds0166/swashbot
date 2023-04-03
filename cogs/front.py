@@ -5,10 +5,22 @@ import asyncio
 
 import discord
 from discord.ext import commands
-from discord import app_commands
 
-from main import Swashbot
+from main import Swashbot, SwashbotMessageable
 from utils.memory import Settings
+
+# TODO: there's lots of repeated code in here, hard to navigate
+
+_permissions_to_message = discord.Permissions(
+   send_messages=True,
+   send_messages_in_threads=True,
+)
+_permission_to_delete = discord.Permissions(
+   manage_messages=True,
+   view_channel=True,
+   read_message_history=True,
+)
+_permissions_for_settings_commands = _permissions_to_message | _permission_to_delete
 
 def _requires_manage_channel_and_manage_messages(perms: discord.Permissions, the_channel: str) -> Optional[str]:
    if perms.manage_channels and perms.manage_messages: return None # user can use this command
@@ -70,7 +82,7 @@ class FrontCog(commands.Cog):
 
    async def check_flotsam(self, channel: int) -> None:
       # nothing to do
-      if channel not in self.client.memo.channels:
+      if channel not in self.client.memo.settings:
          if channel in self.client.decks:
             del self.client.decks[channel]
          return
@@ -78,18 +90,32 @@ class FrontCog(commands.Cog):
       # need to re-gather
       await self.client.gather_flotsam(channel)
 
-   async def check_perms(self,
+   async def check_user_permissions(self,
       ctx: commands.Context,
       channel: Optional[int],
       check: Callable[[discord.Permissions, str], Optional[str]],
    ) -> Optional[int]:
-      """
+      """Checks if the user who invoked the command is allowed to do so
+
+      Parameters:
+         ctx: Command context
+         channel: Channel ID from command arg, if provided
+         check: See check functions above in this file (front.py)
+
+      Returns:
+         int: Guild ID, if user has the permissions
+         None: None, if user has insufficient permissions
       """
       if not isinstance(ctx.author, discord.Member): return
+      if not isinstance(ctx.channel, SwashbotMessageable): return
+
       the_channel = "this channel" if channel is None else ""
 
-      if channel is None: channel = ctx.channel.id
-      discord_channel = await self.client.try_channel(channel)
+      if channel is None:
+         channel = ctx.channel.id
+         discord_channel = ctx.channel
+      else:
+         discord_channel = await self.client.try_channel(channel)
       guild = discord_channel.guild.id
 
       if not the_channel: the_channel = discord_channel.mention
@@ -108,13 +134,16 @@ class FrontCog(commands.Cog):
 
    @commands.hybrid_command(name="atleast", description="always keep the `m` most recent messages in the channel")
    async def slash_atleast(self, ctx: commands.Context, m: Optional[int]=None, channel: Optional[int]=None) -> None:
-      guild = await self.check_perms(ctx, channel, _requires_manage_channel_and_manage_messages)
+      if not isinstance(ctx.channel, SwashbotMessageable): return
+      guild = await self.check_user_permissions(ctx, channel, _requires_manage_channel_and_manage_messages)
       if guild is None: return
 
-      await ctx.message.add_reaction("⏲️")
+      try:
+         await ctx.message.add_reaction("👀")
+      except (discord.NotFound, discord.Forbidden):
+         pass
 
       if channel is None: channel = ctx.channel.id
-      guild = await self.get_guild_id(channel)
       settings = self.client.memo.load(channel)
 
       at_least = inf if m is None else max(0, m)
@@ -122,26 +151,33 @@ class FrontCog(commands.Cog):
       at_most = max(settings.at_most, at_least)
       settings = settings.replace(at_least=at_least, at_most=at_most)
 
+      if settings:
+         if not await self.client.check_permissions(ctx.channel, _permissions_for_settings_commands, inform=ctx.message):
+            return
+
       self.client.memo.save(channel, guild, settings)
       await self.check_flotsam(channel)
 
       if ctx.message:
          try:
             if self.client.user is not None:
-               await ctx.message.remove_reaction("⏲️", self.client.user)
+               await ctx.message.remove_reaction("👀", self.client.user)
             await ctx.message.add_reaction("👌")
          except discord.NotFound:
             pass
 
    @commands.hybrid_command(name="atmost", description="deletes the oldest messages in the channel if the channel message count goes over `m`")
    async def slash_atmost(self, ctx: commands.Context, m: Optional[int]=None, channel: Optional[int]=None) -> None:
-      guild = await self.check_perms(ctx, channel, _requires_manage_channel_and_manage_messages)
+      if not isinstance(ctx.channel, SwashbotMessageable): return
+      guild = await self.check_user_permissions(ctx, channel, _requires_manage_channel_and_manage_messages)
       if guild is None: return
 
-      await ctx.message.add_reaction("⏲️")
+      try:
+         await ctx.message.add_reaction("👀")
+      except (discord.NotFound, discord.Forbidden):
+         pass
 
       if channel is None: channel = ctx.channel.id
-      guild = await self.get_guild_id(channel)
       settings = self.client.memo.load(channel)
 
       at_most = inf if m is None else max(0, m)
@@ -149,30 +185,41 @@ class FrontCog(commands.Cog):
       at_least = min(settings.at_least, at_most)
       settings = settings.replace(at_least=at_least, at_most=at_most)
 
+      if settings:
+         if not await self.client.check_permissions(ctx.channel, _permissions_for_settings_commands, inform=ctx.message):
+            return
+
       self.client.memo.save(channel, guild, settings)
       await self.check_flotsam(channel)
 
       if ctx.message:
          try:
             if self.client.user is not None:
-               await ctx.message.remove_reaction("⏲️", self.client.user)
+               await ctx.message.remove_reaction("👀", self.client.user)
             await ctx.message.add_reaction("👌")
          except discord.NotFound:
             pass
 
    @commands.hybrid_command(name="minutes", description="set messages to wash away each after `t` seconds")
    async def slash_minutes(self, ctx: commands.Context, t: Optional[int]=None, channel: Optional[int]=None) -> None:
-      guild = await self.check_perms(ctx, channel, _requires_manage_channel_and_manage_messages)
+      if not isinstance(ctx.channel, SwashbotMessageable): return
+      guild = await self.check_user_permissions(ctx, channel, _requires_manage_channel_and_manage_messages)
       if guild is None: return
 
-      await ctx.message.add_reaction("⏲️")
+      try:
+         await ctx.message.add_reaction("👀")
+      except (discord.NotFound, discord.Forbidden):
+         pass
 
       if channel is None: channel = ctx.channel.id
-      guild = await self.get_guild_id(channel)
       settings = self.client.memo.load(channel)
 
       minutes = inf if t is None else t
       settings = settings.replace(minutes=minutes)
+
+      if settings:
+         if not await self.client.check_permissions(ctx.channel, _permissions_for_settings_commands, inform=ctx.message):
+            return
 
       self.client.memo.save(channel, guild, settings)
       await self.check_flotsam(channel)
@@ -180,31 +227,49 @@ class FrontCog(commands.Cog):
       if ctx.message:
          try:
             if self.client.user is not None:
-               await ctx.message.remove_reaction("⏲️", self.client.user)
+               await ctx.message.remove_reaction("👀", self.client.user)
             await ctx.message.add_reaction("👌")
-         except discord.NotFound:
+         except (discord.NotFound, discord.Forbidden):
             pass
 
    @commands.hybrid_command(name="wave", description="wash away `n` of the most recent messages in the channel")
    async def slash_wave(self, ctx: commands.Context, n: int=100, channel: Optional[int]=None):
+
       if n < 0:
          if ctx.message:
-            await ctx.message.add_reaction("🤔")
+            try:
+               await ctx.message.add_reaction("🤔")
+            except (discord.Forbidden, discord.NotFound):
+               pass
          return
 
       if n == 0:
          if ctx.message:
-            await ctx.message.add_reaction("👋")
+            try:
+               await ctx.message.add_reaction("👋")
+            except (discord.Forbidden, discord.NotFound):
+               pass
          return
 
-      guild = await self.check_perms(ctx, channel, _requires_manage_messages)
+      if not isinstance(ctx.channel, SwashbotMessageable): return
+      guild = await self.check_user_permissions(ctx, channel, _requires_manage_messages)
       if guild is None: return
 
-      if channel is None: channel = ctx.channel.id
+      if channel is None:
+         channel = ctx.channel.id
+         discord_channel = ctx.channel
+      else:
+         discord_channel = await self.client.try_channel(channel)
+
+      if not await self.client.check_permissions(discord_channel, _permission_to_delete, inform=ctx.message):
+         return
 
       if ctx.message:
-         await ctx.message.add_reaction("⏲️")
-         await ctx.message.add_reaction("🌊")
+         try:
+            await ctx.message.add_reaction("⏲️")
+            await ctx.message.add_reaction("🌊")
+         except (discord.Forbidden, discord.NotFound):
+            pass
 
       await self.client.delete_messages(channel, limit=n, beside=ctx.message.id)
 
@@ -215,17 +280,21 @@ class FrontCog(commands.Cog):
                await ctx.message.remove_reaction("🌊", self.client.user)
             await ctx.message.add_reaction("👌")
             await ctx.message.delete(delay=1)
-         except discord.NotFound:
+         except (discord.Forbidden, discord.NotFound):
             pass
 
    @commands.hybrid_command(name="current", description="get current channel settings")
    async def slash_current(self, ctx: commands.Context, channel: Optional[int]=None):
-      guild = await self.check_perms(ctx, channel, _requires_manage_messages)
+      if not isinstance(ctx.channel, SwashbotMessageable): return
+      guild = await self.check_user_permissions(ctx, channel, _requires_manage_messages)
       if guild is None: return
 
       if channel is None: channel = ctx.channel.id
-      settings = Settings() if not channel in self.client.memo.channels \
-         else self.client.memo.channels[channel]
+      settings = Settings() if not channel in self.client.memo.settings \
+         else self.client.memo.settings[channel]
+
+      if not await self.client.check_permissions(ctx.channel, _permissions_to_message, inform=ctx.message):
+         return
 
       content = (
          f"```py\n"

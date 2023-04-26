@@ -30,6 +30,7 @@ _swashbot_login_activity = discord.Activity(
    type=discord.ActivityType.listening,
    name="the soft waves"
 )
+_swashbot_throttle_seconds = 0.85
 
 class Swashbot(commands.Bot):
    """Represents our beloved ocean bot
@@ -82,7 +83,7 @@ class Swashbot(commands.Bot):
          self.disconnects += 1
          return
       
-      for channel in self.memo.settings:
+      for channel in list(self.memo.settings):
          await self.gather_flotsam(channel)
       
       self.ready = datetime.utcnow()
@@ -152,6 +153,11 @@ class Swashbot(commands.Bot):
       if channel in self.memo.settings:
          self.log.info(f"The channel {channel.name!r} ({channel.id}) I was watching was deleted, so I'll remove its deck from memory.")
          self.memo.remove(channel.id)
+
+   async def on_raw_thread_delete(self, payload: discord.RawThreadDeleteEvent) -> None:
+      if payload.thread_id in self.memo.settings:
+         self.log.info(f"The thread {payload.thread_id} I was watching was deleted, so I'll remove its deck from memory.")
+         self.memo.remove(payload.thread_id)
 
    async def on_command_completion(self, ctx: commands.Context) -> None:
       self.commands_processed += 1
@@ -240,9 +246,9 @@ class Swashbot(commands.Bot):
       minutes, seconds = (int((datetime.utcnow() - start).total_seconds()), 60)
       if seconds == 60: seconds = 0 # weird divmod bug
       time = f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
-      self.log.info(f"{task}: Finished gathering flotsam for #{discord_channel.name} ({channel}) (about {len(deck)} messages(s) after {time}).")
+      self.log.info(f"{task}: Finished gathering flotsam for {discord_channel.name!r} ({channel}) (about {len(deck)} messages(s) after {time}).")
 
-   async def try_delete(self, discord_channel: discord.TextChannel, id: int) -> None:
+   async def try_delete(self, discord_channel: SwashbotMessageable, id: int) -> None:
       """Attempt to delete a single message
 
       Args:
@@ -252,13 +258,16 @@ class Swashbot(commands.Bot):
       try:
          message = await discord_channel.fetch_message(id)
       except discord.NotFound:
+         self.log.debug(f"Message {id} was not found.")
          return
       if message.pinned: return
+      while self.is_ws_ratelimited(): await asyncio.sleep(0)
       try:
          await message.delete()
          self.messages_deleted += 1
       except discord.Forbidden:
          pass
+      await asyncio.sleep(_swashbot_throttle_seconds)
 
    async def delete_messages(self, channel: int, *, limit: int, beside: Optional[int]=None) -> None:
       """Delete a number of a channel's most recent messages
@@ -280,6 +289,7 @@ class Swashbot(commands.Bot):
             self.messages_deleted += 1
          except discord.Forbidden:
             pass
+         await asyncio.sleep(_swashbot_throttle_seconds)
 
    async def check_permissions(self, channel: SwashbotMessageable, required: discord.Permissions, *,
       inform: Optional[discord.Message]=None
@@ -299,7 +309,7 @@ class Swashbot(commands.Bot):
 
       if self_member is None:
          self.log.warning((
-            f"I tried to check my permissions for #{channel.name} ({channel.id}) in "
+            f"I tried to check my permissions for {channel.name!r} ({channel.id}) in "
             f"{channel.guild.name!r} ({channel.guild.id}), but it seems I'm not in that guild?"
          ))
          return False

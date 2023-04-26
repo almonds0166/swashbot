@@ -5,6 +5,7 @@ import discord
 from discord.ext import tasks, commands
 
 from main import Swashbot, SwashbotMessageable
+from utils.flotsam import Deck
 
 _swashbot_pace_seconds = 5
 
@@ -13,6 +14,14 @@ _permission_to_delete = discord.Permissions(
    view_channel=True,
    read_message_history=True,
 )
+
+def age_minutes(deck: Deck, now: Optional[datetime]=None) -> float:
+   if deck.oldest is None: return -1
+
+   now = datetime.utcnow() if now is None else now
+   created_at = deck.oldest.created_at.replace(tzinfo=None)
+   
+   return (now - created_at).total_seconds() / 60
 
 class WasherCog(commands.Cog):
    def __init__(self, client: Swashbot) -> None:
@@ -23,6 +32,8 @@ class WasherCog(commands.Cog):
    async def watcher(self) -> None:
       """Main watchdog loop that keeps track of when we have messages to delete
       """
+      if not self.client.ready: return
+
       task = self.client.new_task()
       messages = 0
 
@@ -43,7 +54,7 @@ class WasherCog(commands.Cog):
                   break
 
             if not clean_shoreface:
-               self.client.log.debug(f"{task}: #{discord_channel.name} ({channel}): Looks like I have about {len(deck) - settings.at_most} message(s) in the shore face...")
+               self.client.log.debug(f"{task}: {discord_channel.name!r} ({channel}): Looks like I have about {len(deck) - settings.at_most} message(s) in the shore face...")
                clean_shoreface = True
 
             id = deck.pop_oldest()
@@ -53,11 +64,8 @@ class WasherCog(commands.Cog):
          if insufficient_permissions: continue
 
          if deck.oldest is None: continue
-         now = datetime.utcnow()
-         created_at = deck.oldest.created_at.replace(tzinfo=None)
-         age_minutes = (now - created_at).total_seconds() / 60
-         
-         while len(deck) > settings.at_least and age_minutes >= settings.minutes:
+
+         while len(deck) > settings.at_least and age_minutes(deck) >= settings.minutes:
             if discord_channel is None:
                discord_channel = await self.client.try_channel(channel)
                if not await self.client.check_permissions(discord_channel, _permission_to_delete):
@@ -65,7 +73,8 @@ class WasherCog(commands.Cog):
                   break
             
             if not clean_swashzone:
-               self.client.log.debug(f"{task}: #{discord_channel.name} ({channel}): Looks like I have some messages to clean in the swash zone...")
+               self.client.log.debug(f"{task}: {discord_channel.name!r} ({channel}): Looks like I have some messages to clean in the swash zone...")
+               clean_swashzone = True
 
             id = deck.pop_oldest()
             await self.client.try_delete(discord_channel, id)

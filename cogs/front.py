@@ -37,38 +37,6 @@ def _requires_manage_messages(perms: discord.Permissions, the_channel: str) -> O
 
    return f"You don't have the **Manage Messages** permission for {the_channel}"
 
-def settings_status(settings: Settings) -> str:
-   at_least = settings.at_least
-   at_most = settings.at_most
-   minutes = settings.minutes
-
-   if isinf(at_least) or (isinf(at_most) and isinf(minutes)):
-       return "No action taken."
-
-   status = []
-   if at_least == 0 and at_most == 0:
-      status.append("Turbid! Delete all new messages immediately.")
-      #status.append("Wait, doesn't that mean this message will get deleted in a split second?")
-   elif at_least == 0:
-      if not isinf(at_most):
-         status.append(f"Immediately delete all messages past count {at_most}.")
-         status.append(f"Everything else takes {minutes} minute{'s' if minutes != 1 else ''} to wash away.")
-      else:
-         status.append(f"Messages take {minutes} minute{'s' if minutes != 1 else ''} to wash away.")
-   elif at_least == at_most and not isinf(at_most):
-      status.append(f"Immediately delete all messages past count {at_most}.")
-   else:
-      status.append(f"Always keep the {at_least} most recent message{'s' if at_least != 1 else ''}.")
-
-      if not isinf(at_most):
-         status.append(f"Delete all messages past count {at_most}.")
-         if not isinf(minutes):
-            status.append(f"Any messages in-between take {minutes} minute{'s' if minutes != 1 else ''} to wash away.")
-      else:
-         status.append(f"Any other messages take {minutes} minute{'s' if minutes != 1 else ''} to wash away.")
-
-   return "\n".join(status)
-
 class FrontCog(commands.Cog):
    """Cog that handles the user commands
    """
@@ -133,7 +101,7 @@ class FrontCog(commands.Cog):
       return guild
 
    @commands.hybrid_command(name="atleast", description="always keep the `m` most recent messages in the channel")
-   async def slash_atleast(self, ctx: commands.Context, m: Optional[int]=None, channel: Optional[int]=None) -> None:
+   async def slash_atleast(self, ctx: commands.Context, m: str, channel: Optional[int]=None) -> None:
       if not isinstance(ctx.channel, SwashbotMessageable): return
       guild = await self.check_user_permissions(ctx, channel, _requires_manage_channel_and_manage_messages)
       if guild is None: return
@@ -146,7 +114,12 @@ class FrontCog(commands.Cog):
       if channel is None: channel = ctx.channel.id
       settings = self.client.memo.load(channel)
 
-      at_least = inf if m is None else max(0, m)
+      if m.lower() in ("inf", "infinity"):
+         at_least = inf
+      elif m.isdigit():
+         at_least = int(m)
+      else:
+         return
       # at_least parameter can bump up the at_most parameter
       at_most = max(settings.at_most, at_least)
       settings = settings.replace(at_least=at_least, at_most=at_most)
@@ -167,7 +140,7 @@ class FrontCog(commands.Cog):
             pass
 
    @commands.hybrid_command(name="atmost", description="deletes the oldest messages in the channel if the channel message count goes over `m`")
-   async def slash_atmost(self, ctx: commands.Context, m: Optional[int]=None, channel: Optional[int]=None) -> None:
+   async def slash_atmost(self, ctx: commands.Context, m: str, channel: Optional[int]=None) -> None:
       if not isinstance(ctx.channel, SwashbotMessageable): return
       guild = await self.check_user_permissions(ctx, channel, _requires_manage_channel_and_manage_messages)
       if guild is None: return
@@ -180,7 +153,12 @@ class FrontCog(commands.Cog):
       if channel is None: channel = ctx.channel.id
       settings = self.client.memo.load(channel)
 
-      at_most = inf if m is None else max(0, m)
+      if m.lower() in ("inf", "infinity"):
+         at_most = inf
+      elif m.isdigit():
+         at_most = int(m)
+      else:
+         return
       # at_most parameter can bump down the at_least parameter
       at_least = min(settings.at_least, at_most)
       settings = settings.replace(at_least=at_least, at_most=at_most)
@@ -201,7 +179,7 @@ class FrontCog(commands.Cog):
             pass
 
    @commands.hybrid_command(name="minutes", description="set messages to wash away each after `t` seconds")
-   async def slash_minutes(self, ctx: commands.Context, t: Optional[int]=None, channel: Optional[int]=None) -> None:
+   async def slash_minutes(self, ctx: commands.Context, t: str, channel: Optional[int]=None) -> None:
       if not isinstance(ctx.channel, SwashbotMessageable): return
       guild = await self.check_user_permissions(ctx, channel, _requires_manage_channel_and_manage_messages)
       if guild is None: return
@@ -214,7 +192,12 @@ class FrontCog(commands.Cog):
       if channel is None: channel = ctx.channel.id
       settings = self.client.memo.load(channel)
 
-      minutes = inf if t is None else t
+      if t.lower() in ("inf", "infinity"):
+         minutes = inf
+      elif t.isdigit():
+         minutes = int(t)
+      else:
+         return
       settings = settings.replace(minutes=minutes)
 
       if settings:
@@ -306,7 +289,7 @@ class FrontCog(commands.Cog):
          f"```\n"
       ).strip()
 
-      status = settings_status(settings)
+      status = str(settings)
 
       embed = discord.Embed(
          title="Current settings for this channel",

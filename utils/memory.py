@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Set
+from typing import Optional, Dict, Set, Union
 
 from pathlib import Path
 import sqlite3
@@ -38,6 +38,34 @@ class Settings:
          self.at_most if at_most is None else at_most,
          self.minutes if minutes is None else minutes,
       )
+
+   def __str__(self):
+      if isinf(self.at_least) or (isinf(self.at_most) and isinf(self.minutes)):
+          return "No action taken."
+
+      status = []
+      if self.at_least == 0 and self.at_most == 0:
+         status.append("Turbid! Delete all new messages immediately.")
+         status.append("Wait, doesn't that mean this message will get deleted in a split second?")
+      elif self.at_least == 0:
+         if not isinf(self.at_most):
+            status.append(f"Immediately delete all messages past count {self.at_most}.")
+            status.append(f"Everything else takes {self.minutes} minute{'s' if self.minutes != 1 else ''} to wash away.")
+         else:
+            status.append(f"Messages take {self.minutes} minute{'s' if self.minutes != 1 else ''} to wash away.")
+      elif self.at_least == self.at_most and not isinf(self.at_most):
+         status.append(f"Immediately delete all messages past count {self.at_most}.")
+      else:
+         status.append(f"Always keep the {self.at_least} most recent message{'s' if self.at_least != 1 else ''}.")
+
+         if not isinf(self.at_most):
+            status.append(f"Delete all messages past count {self.at_most}.")
+            if not isinf(self.minutes):
+               status.append(f"Any messages in-between take {self.minutes} minute{'s' if self.minutes != 1 else ''} to wash away.")
+         else:
+            status.append(f"Any other messages take {self.minutes} minute{'s' if self.minutes != 1 else ''} to wash away.")
+
+      return "\n".join(status)
 
 @dataclass
 class LongTermMemory:

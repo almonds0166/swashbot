@@ -10,6 +10,7 @@ from main import Swashbot, SwashbotMessageable
 from utils.memory import Settings
 
 # TODO: there's lots of repeated code in here, hard to navigate
+# Especially the cumbersome emoji reaction logic
 
 _permissions_to_message = discord.Permissions(
    send_messages=True,
@@ -48,15 +49,15 @@ class FrontCog(commands.Cog):
       guild = discord_channel.guild.id
       return guild
 
-   async def check_flotsam(self, channel: int) -> None:
+   async def check_flotsam(self, channel: int) -> int:
       # nothing to do
       if channel not in self.client.memo.settings:
          if channel in self.client.decks:
             del self.client.decks[channel]
-         return
+         return 0
 
       # need to re-gather
-      await self.client.gather_flotsam(channel)
+      return await self.client.gather_flotsam(channel)
 
    async def check_user_permissions(self,
       ctx: commands.Context,
@@ -100,6 +101,32 @@ class FrontCog(commands.Cog):
 
       return guild
 
+   @commands.hybrid_command(name="sink", description="re-sync messages for the channel")
+   async def slash_sink(self, ctx: commands.Context, channel: Optional[int]=None) -> None:
+      if not isinstance(ctx.channel, SwashbotMessageable): return
+      guild = await self.check_user_permissions(ctx, channel, _requires_manage_channel_and_manage_messages)
+      if guild is None: return
+      if channel is None: channel = ctx.channel.id
+
+      if ctx.message:
+         try:
+            await ctx.message.add_reaction("⏲️")
+         except (discord.Forbidden, discord.NotFound):
+            pass
+
+      count = await self.check_flotsam(channel)
+
+      if ctx.message:
+         try:
+            if self.client.user is not None:
+               await ctx.message.remove_reaction("⏲️", self.client.user)
+            await ctx.message.add_reaction("👌")
+         except (discord.Forbidden, discord.NotFound):
+            pass
+
+      if ctx.interaction:
+         await ctx.reply(f"Found {count} message" + ("s!" if count != 1 else "!"))
+
    @commands.hybrid_command(name="atleast", description="always keep the `m` most recent messages in the channel")
    async def slash_atleast(self, ctx: commands.Context, m: str, channel: Optional[int]=None) -> None:
       if not isinstance(ctx.channel, SwashbotMessageable): return
@@ -138,6 +165,9 @@ class FrontCog(commands.Cog):
             await ctx.message.add_reaction("👌")
          except discord.NotFound:
             pass
+
+      if ctx.interaction:
+         await ctx.reply(f"Done! `at_least = {settings.at_least}`")
 
    @commands.hybrid_command(name="atmost", description="deletes the oldest messages in the channel if the channel message count goes over `m`")
    async def slash_atmost(self, ctx: commands.Context, m: str, channel: Optional[int]=None) -> None:
@@ -178,6 +208,9 @@ class FrontCog(commands.Cog):
          except discord.NotFound:
             pass
 
+      if ctx.interaction:
+         await ctx.reply(f"Done! `at_most = {settings.at_most}`")
+
    @commands.hybrid_command(name="minutes", description="set messages to wash away each after `t` seconds")
    async def slash_minutes(self, ctx: commands.Context, t: str, channel: Optional[int]=None) -> None:
       if not isinstance(ctx.channel, SwashbotMessageable): return
@@ -214,6 +247,9 @@ class FrontCog(commands.Cog):
             await ctx.message.add_reaction("👌")
          except (discord.NotFound, discord.Forbidden):
             pass
+
+      if ctx.interaction:
+         await ctx.reply(f"Done! `minutes = {settings.minutes}`")
 
    @commands.hybrid_command(name="wave", description="wash away `n` of the most recent messages in the channel")
    async def slash_wave(self, ctx: commands.Context, n: int=100, channel: Optional[int]=None):
@@ -265,6 +301,9 @@ class FrontCog(commands.Cog):
             await ctx.message.delete(delay=1)
          except (discord.Forbidden, discord.NotFound):
             pass
+
+      if ctx.interaction:
+         await ctx.reply(f"Done!")
 
    @commands.hybrid_command(name="current", description="get current channel settings")
    async def slash_current(self, ctx: commands.Context, channel: Optional[int]=None):

@@ -162,9 +162,10 @@ class Swashbot(commands.Bot):
    async def on_command_completion(self, ctx: commands.Context) -> None:
       self.commands_processed += 1
       args = ", ".join([repr(arg) for arg in ctx.args][2:])
+      means = f"{ctx.message.content!r}" if ctx.message.content else "a slash command"
       summary = (
          f"``{ctx.command}({args})`` invoked by "
-         f"{ctx.author} with {ctx.message.content!r}"
+         f"{ctx.author} with {means}"
       )
       self.log.debug(f"Completed processing command #{self.commands_processed}: {summary}.")
 
@@ -215,28 +216,30 @@ class Swashbot(commands.Bot):
       self.log.debug(f"{task}: Done.")
       return discord_channel
 
-   async def gather_flotsam(self, channel: int) -> None:
+   async def gather_flotsam(self, channel: int) -> int:
       """Keep a record of messages in a channel
 
       Args:
          channel: Channel ID
+
+      Returns:
+         int: Number of messages gathered.
       """
       task = self.new_task()
       self.log.info(f"{task}: Gathering flotsam for channel {channel}...")
       start = datetime.utcnow()
 
       settings = self.memo.settings[channel]
-      if not settings: return
+      if not settings: return 0
 
       try:
          discord_channel = await self.try_channel(channel)
       except discord.NotFound:
          if channel in self.memo.settings: self.memo.remove(channel)
-         return
+         return 0
       deck = Deck()
 
-      # ⚠️ TODO: not sure if this limit is correct
-      limit = None if isinf(settings.at_most) else int(settings.at_most)
+      limit = None if isinf(settings.at_most) else int(settings.at_most + 10)
       async for message in discord_channel.history(limit=limit):
          if message.pinned: continue
          deck.append_old(message)
@@ -247,6 +250,7 @@ class Swashbot(commands.Bot):
       if seconds == 60: seconds = 0 # weird divmod bug
       time = f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
       self.log.info(f"{task}: Finished gathering flotsam for {discord_channel.name!r} ({channel}) (about {len(deck)} messages(s) after {time}).")
+      return len(deck)
 
    async def try_delete(self, discord_channel: SwashbotMessageable, id: int) -> None:
       """Attempt to delete a single message

@@ -1,4 +1,6 @@
 from typing import Optional
+from pathlib import Path
+import asyncio
 
 import discord
 from discord.ext import commands
@@ -78,10 +80,66 @@ class MetaCog(commands.Cog):
 
    @commands.hybrid_command(name="backup", description="make a backup of Swashbot's long-term memory (must be bot owner)")
    async def slash_backup(self, ctx: commands.Context, tag: Optional[str]=None):
-      if not await self.client.is_owner(ctx.author): return
+      if not await self.client.is_owner(ctx.author):
+         await ctx.reply("You're not my owner 👀")
+         return
 
       backup_file = self.client.memo.backup(tag)
-      await ctx.reply(f"I made a backup named **{backup_file}**")
+      await ctx.reply(f"I made a backup named `{backup_file!r}`")
+
+   @commands.hybrid_command(name="tail", description="print out tail of some file")
+   async def slash_tail(self, ctx: commands.Context, file: str="debug.log", n: int=5):
+      if not await self.client.is_owner(ctx.author):
+         await ctx.reply("You're not my owner 👀")
+         return
+
+      try:
+         with open(Path(file), "r") as f:
+            lines = f.readlines()
+            tail = "".join(lines[-n:]).strip()
+      except FileNotFoundError:
+         await ctx.message.add_reaction("👀")
+         cwd = Path(".")
+         files = [f.name for f in cwd.iterdir()]
+         max_length = max(len(f) for f in files)
+         num_columns = 80 // (max_length + 2)
+         ls_string = ""
+         for i, f in enumerate(files):
+            ls_string += f.ljust(max_length + 2)
+            if (i + 1) % num_columns == 0:
+               ls_string += "\n"
+
+         msg = (
+            f"Hm, I can't find `{file!r}` here. "
+            f"If it helps, I'm currently at `{Path('.').resolve()}`. "
+            f"Here're the files I can see:\n"
+            f"```\n"
+            f"{ls_string}\n"
+            f"```"
+         )
+
+      else:
+         msg = f"`{file!r}`:\n```\n{tail}\n```"
+
+      async with ctx.typing(): await asyncio.sleep(1)
+      try:
+         await ctx.reply(msg)
+      except discord.NotFound:
+         pass
+
+   @commands.hybrid_command(name="slash", description="sync slash commands")
+   async def slash_slash(self, ctx: commands.Context):
+      if not await self.client.is_owner(ctx.author):
+         await ctx.reply("You're not my owner 👀")
+         return
+
+      synced = await self.client.tree.sync()
+      msg = f"Synced {len(synced)} commands."
+      self.client.log.info(msg)
+      if ctx.interaction:
+         await ctx.reply(f"Synced {len(synced)} commands.")
+      else:
+         await ctx.message.add_reaction("👌")
 
 async def setup(client: Swashbot) -> None:
    client.remove_command("help")
